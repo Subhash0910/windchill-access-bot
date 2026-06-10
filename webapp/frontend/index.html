@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Windchill Access Bot — Live Demo</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e;
+    --green: #3fb950; --amber: #d29922; --blue: #58a6ff; --red: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 'Segoe UI', system-ui, sans-serif; padding: 24px; }
+  .container { max-width: 1200px; margin: 0 auto; }
+
+  header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  h1 { font-size: 20px; } h1 small { color: var(--muted); font-weight: normal; font-size: 13px; display: block; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { background: #21262d; color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  button:hover { background: #30363d; }
+  button.primary { background: #238636; border-color: #2ea043; }
+  button.primary:hover { background: #2ea043; }
+  button.danger { background: #21262d; color: var(--red); border-color: var(--red); }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .stat .num { font-size: 26px; font-weight: 700; }
+  .stat .label { color: var(--muted); font-size: 12px; }
+  .stat.green .num { color: var(--green); } .stat.amber .num { color: var(--amber); }
+  .stat.blue .num { color: var(--blue); }
+
+  .grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .panel h2 { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px; }
+
+  .ticket { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: var(--bg);
+            animation: slideIn .3s ease; }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; } }
+  .ticket .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .ticket .tid { font-weight: 600; color: var(--blue); }
+  .badge { font-size: 11px; padding: 2px 10px; border-radius: 10px; font-weight: 600; }
+  .badge.pending { background: #1f6feb33; color: var(--blue); }
+  .badge.auto { background: #23863633; color: var(--green); }
+  .badge.human { background: #d2992233; color: var(--amber); }
+  .ticket .note { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+  .ticket .botnote { font-size: 12px; padding: 7px 9px; border-radius: 6px; background: #161b22; border-left: 3px solid var(--border); }
+  .ticket .botnote.auto { border-left-color: var(--green); }
+  .ticket .botnote.human { border-left-color: var(--amber); }
+  .approver { font-size: 12px; color: var(--green); margin-bottom: 6px; }
+
+  .custom { display: flex; gap: 8px; margin-bottom: 14px; }
+  .custom input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+                  color: var(--text); padding: 8px 10px; font-size: 13px; }
+
+  .logline { font: 12px/1.7 Consolas, monospace; color: var(--muted); border-bottom: 1px solid #21262d; padding: 3px 0; }
+  .logline .ts { color: #484f58; }
+  .libs td { padding: 4px 8px; font-size: 12px; color: var(--muted); }
+  .libs td:first-child { color: var(--text); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .dot.on { background: var(--green); } .dot.off { background: var(--red); }
+  .killbar { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .footer { margin-top: 18px; color: #484f58; font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Windchill Access Bot <small>auto-resolves "Add data owner approver" tasks &middot; demo with fictional data</small></h1>
+    <div class="controls">
+      <span class="killbar"><span id="botdot" class="dot on"></span><span id="botstate">Bot active</span></span>
+      <button class="primary" onclick="inject()">+ New ticket arrives</button>
+      <button onclick="toggleBot()" id="killbtn">Kill switch</button>
+      <button class="danger" onclick="resetAll()">Reset</button>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat blue"><div class="num" id="s-total">0</div><div class="label">Tickets received</div></div>
+    <div class="stat green"><div class="num" id="s-auto">0</div><div class="label">Auto-resolved by bot</div></div>
+    <div class="stat amber"><div class="num" id="s-human">0</div><div class="label">Left for human (safe fallback)</div></div>
+    <div class="stat green"><div class="num" id="s-saved">0h</div><div class="label">Queue latency removed (vs 2h baseline)</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Xurrent queue — "Add data owner approver" tasks</h2>
+      <div class="custom">
+        <input id="customNote" placeholder='Type your own request… e.g. "need access to the Tooling Library"'
+               onkeydown="if(event.key==='Enter')injectCustom()">
+        <button onclick="injectCustom()">Submit</button>
+      </div>
+      <div id="tickets"></div>
+    </div>
+    <div>
+      <div class="panel" style="margin-bottom:16px">
+        <h2>Bot activity log</h2>
+        <div id="log" style="max-height:300px;overflow-y:auto"></div>
+      </div>
+      <div class="panel">
+        <h2>libraries.csv (owner mapping)</h2>
+        <table class="libs" id="libs"></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">Prototype &middot; all names and data are fictional &middot; built from public Xurrent API documentation</div>
+</div>
+
+<script>
+// Backend URL: same origin by default (single deploy on Render).
+// For a Vercel-hosted frontend, pass ?api=https://your-backend.onrender.com
+const API = new URLSearchParams(location.search).get('api') || '';
+
+async function call(path, opts) {
+  const r = await fetch(API + path, opts);
+  return r.json();
+}
+
+function inject() { call('/api/tickets', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'}); }
+function injectCustom() {
+  const el = document.getElementById('customNote');
+  if (!el.value.trim()) return;
+  call('/api/tickets', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({note: el.value.trim()})});
+  el.value = '';
+}
+function resetAll() { call('/api/reset', {method:'POST'}); }
+let botEnabled = true;
+function toggleBot() {
+  call('/api/toggle', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({enabled: !botEnabled})});
+}
+
+function fmt(ts) { return new Date(ts).toLocaleTimeString(); }
+
+function render(s) {
+  botEnabled = s.enabled;
+  document.getElementById('botdot').className = 'dot ' + (s.enabled ? 'on' : 'off');
+  document.getElementById('botstate').textContent = s.enabled ? 'Bot active' : 'Bot STOPPED';
+  document.getElementById('killbtn').textContent = s.enabled ? 'Kill switch' : 'Restart bot';
+
+  document.getElementById('s-total').textContent = s.stats.total;
+  document.getElementById('s-auto').textContent = s.stats.auto_resolved;
+  document.getElementById('s-human').textContent = s.stats.left_for_human;
+  document.getElementById('s-saved').textContent = (s.stats.minutes_saved / 60).toFixed(1) + 'h';
+
+  document.getElementById('tickets').innerHTML = s.tasks.map(t => {
+    const badge = t.outcome === 'auto' ? '<span class="badge auto">✓ auto-resolved</span>'
+                : t.outcome === 'human' ? '<span class="badge human">→ human queue</span>'
+                : '<span class="badge pending">⋯ in queue</span>';
+    const approver = t.approver ? `<div class="approver">Approver set: <b>${t.approver.name}</b> (${t.approver.email})</div>` : '';
+    const notes = t.notes.map(n => `<div class="botnote ${t.outcome||''}">${n}</div>`).join('');
+    return `<div class="ticket">
+      <div class="top"><span class="tid">Task ${t.id} · ${t.request.subject}</span>${badge}</div>
+      <div class="note">${t.request.note}</div>
+      ${approver}${notes}
+    </div>`;
+  }).join('') || '<div style="color:var(--muted);padding:20px;text-align:center">Queue is empty — click "New ticket arrives"</div>';
+
+  document.getElementById('log').innerHTML = s.log.map(l =>
+    `<div class="logline"><span class="ts">${fmt(l.ts)}</span>  ${l.msg}</div>`).join('');
+
+  document.getElementById('libs').innerHTML =
+    '<tr><td><b>Library</b></td><td><b>Owner</b></td><td></td></tr>' +
+    s.libraries.map(l =>
+      `<tr><td>${l.library}</td><td>${l.owner}</td><td>${l.disabled ? '<span style="color:var(--red)">left org</span>' : ''}</td></tr>`).join('');
+}
+
+let lastState = '';
+async function tick() {
+  try {
+    const s = await call('/api/state');
+    const snapshot = JSON.stringify(s);
+    if (snapshot === lastState) return;   // nothing changed -> no redraw, no flicker
+    lastState = snapshot;
+    render(s);
+  } catch (e) { /* backend waking up */ }
+}
+setInterval(tick, 1500);
+tick();
+</script>
+</body>
+</html>
