@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "mode": "mock",
+  "poll_interval_seconds": 5,
+  "csv_path": "libraries.csv",
+  "task_template_keyword": "Add data owner approver",
+  "log_file": "bot.log",
+  "mock_queue_path": "mock_data/queue.json",
+  "live": {
+    "base_url": "https://api.xurrent.com/v1",
+    "account": "YOUR-ACCOUNT-ID",
+    "token_env_var": "XURRENT_TOKEN",
+    "team_filter": "Windchill Support"
+  }
+}
